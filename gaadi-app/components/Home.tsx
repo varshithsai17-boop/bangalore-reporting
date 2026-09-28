@@ -123,6 +123,8 @@ export default function Home() {
   const [pinPlace, setPinPlace] = useState<{ street: string | null; ward: string | null } | null>(null);
   const [sending, setSending] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
+  /** Open spots near the pin that might be the same pile; set when the reporter taps Send. */
+  const [dupes, setDupes] = useState<Nearby[] | null>(null);
 
   const startReport = async () => {
     setPanel("report");
@@ -132,6 +134,7 @@ export default function Home() {
     setPhoto(null);
     setPin(null);
     setPinPlace(null);
+    setDupes(null);
     showPanel();
     const p = await locate();
     if (p && inCity(p)) {
@@ -140,6 +143,7 @@ export default function Home() {
     }
   };
   useEffect(() => {
+    setDupes(null); // moving the pin means the nearby list must be checked again
     if (!pin) return;
     let live = true;
     const t = setTimeout(() => {
@@ -165,18 +169,65 @@ export default function Home() {
     }
   };
 
+  // Open spots that could be the same pile: within 150 m, or on the same street within 400 m.
+  const nearbyNow = useMemo(() => (pin ? nearbySpots(pin, pinPlace?.street ?? null, spots) : []), [pin, pinPlace, spots]);
+
+  /** Step 1 of sending: if there are open spots nearby, ask whether it's one of them first. */
   const sendReport = async () => {
     if (!photo || !category || !pin) return;
     setSending(true);
     try {
+      const fresh = (await api.spots()).spots;
+      setSpots(fresh);
+      const found = nearbySpots(pin, pinPlace?.street ?? null, fresh);
+      if (found.length) {
+        setDupes(found);
+        return;
+      }
+      await submitNew(false);
+    } catch (e) {
+      say((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  /** A brand-new spot. forceNew = the reporter said it isn't any of the nearby ones. */
+  const submitNew = async (forceNew: boolean) => {
+    if (!photo || !category || !pin) return;
+    setSending(true);
+    try {
       const { path } = await api.photo(photo.blob);
-      const r = await api.spot(pin.lat, pin.lng, category, path);
+      const r = await api.spot(pin.lat, pin.lng, category, path, forceNew);
       say(r.merged ? "Thanks. Added to a spot others already reported." : "Thanks. It's on the map.");
       const sp = await api.spots();
       setSpots(sp.spots);
       setSpotId(r.spot_id);
       setPanel("spot");
       setPin(null);
+      setDupes(null);
+    } catch (e) {
+      say((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  /** The reporter says it's the same pile: their photo is added to that spot as another report. */
+  const joinSpot = async (s: Spot) => {
+    if (!photo) return;
+    setSending(true);
+    try {
+      const { path } = await api.photo(photo.blob);
+      await api.vote(s.id, "still", path);
+      say(`Added to this spot. ${s.confirms + 1} people have reported it now.`);
+      const sp = await api.spots();
+      setSpots(sp.spots);
+      setSpotId(s.id);
+      setPanel("spot");
+      setPin(null);
+      setDupes(null);
+      setFocus({ key: Date.now(), point: { lat: s.lat, lng: s.lng }, zoom: 16 });
     } catch (e) {
       say((e as Error).message);
     } finally {
@@ -480,9 +531,53 @@ export default function Home() {
                 {pin && pinPlace?.ward && <span className="muted small">{pinPlace.ward} ward</span>}
                 {pin && pinPlace && !pinPlace.ward && <span className="warn">This spot is outside Bengaluru's wards.</span>}
               </div>
-              <button className="btn primary" disabled={!photo || !category || !pin || sending || (pinPlace != null && !pinPlace.ward)} onClick={sendReport}>
-                {sending ? "Sending…" : "Send report"}
-              </button>
+              {!dupes ? (
+                <>
+                  {nearbyNow.length > 0 && (
+                    <p className="muted small">
+                      {nearbyNow.length} open garbage {nearbyNow.length === 1 ? "report is" : "reports are"} already near this spot. We'll check with you before sending.
+                    </p>
+                  )}
+                  <button className="btn primary" disabled={!photo || !category || !pin || sending || (pinPlace != null && !pinPlace.ward)} onClick={sendReport}>
+                    {sending ? "Checking…" : "Send report"}
+                  </button>
+                </>
+              ) : (
+                <div className="dupes">
+                  <h3>Is it one of these?</h3>
+                  <p className="muted small">
+                    These are already reported near you. If it's the same pile, add your photo to it. More people on one report pushes it up the city's list faster than
+                    several separate ones.
+                  </p>
+                  <ul>
+                    {dupes.map((d) => (
+                      <li key={d.id}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photoUrl(d.photo)} alt="" />
+                        <span className="dupe-info">
+                          <b>{d.label || "Unnamed road"}</b>
+                          <small>
+                            {CATEGORY_INFO[d.category].label} · {d.dist < 20 ? "right here" : `${Math.round(d.dist / 10) * 10} m away`}
+                            {d.sameStreet ? " · same street" : ""}
+                          </small>
+                          <small>
+                            Reported by {d.confirms} · open {daysOpen(d)}
+                          </small>
+                        </span>
+                        <button className="btn primary" disabled={sending} onClick={() => joinSpot(d)}>
+                          Yes, this one
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button className="btn" disabled={sending} onClick={() => submitNew(true)}>
+                    {sending ? "Sending…" : "No, it's a different spot"}
+                  </button>
+                  <button className="linkish center" onClick={() => setDupes(null)}>
+                    Back
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -743,4 +838,31 @@ function TodayCard(p: {
       {p.today && <p className="muted small">Tap another answer to change it. You can check in once a day.</p>}
     </div>
   );
+}
+
+/* ================================================================== duplicate check */
+
+type Nearby = Spot & { dist: number; sameStreet: boolean };
+
+const distM = (a: LatLng, b: LatLng) => {
+  const k = Math.cos(((a.lat + b.lat) / 2) * (Math.PI / 180));
+  return 111320 * Math.hypot(b.lat - a.lat, (b.lng - a.lng) * k);
+};
+const streetKey = (s: string | null | undefined) => (s ?? "").split(",")[0].trim().toLowerCase();
+
+/**
+ * Open spots that might be the pile being reported: anything within 150 m (phone GPS is often
+ * 20-50 m off), or on the same named street within 400 m. Nearest first, at most 4.
+ */
+function nearbySpots(pin: LatLng, street: string | null, all: Spot[]): Nearby[] {
+  const key = streetKey(street);
+  return all
+    .filter((s) => s.status === "open")
+    .map((s) => {
+      const dist = distM(pin, s);
+      return { ...s, dist, sameStreet: !!key && streetKey(s.label) === key };
+    })
+    .filter((s) => s.dist <= 150 || (s.sameStreet && s.dist <= 400))
+    .sort((a, b) => Number(b.sameStreet && b.dist < 150) - Number(a.sameStreet && a.dist < 150) || a.dist - b.dist)
+    .slice(0, 4);
 }

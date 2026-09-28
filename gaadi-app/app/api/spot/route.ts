@@ -8,7 +8,7 @@ import { wardAt } from "@/lib/wards";
 export async function POST(req: Request) {
   const ip = clientIp(req);
   if (rateLimited(`spot:${ip}`, 10, 60_000)) return tooMany();
-  let b: { device?: unknown; lat?: unknown; lng?: unknown; category?: unknown; photo?: unknown };
+  let b: { device?: unknown; lat?: unknown; lng?: unknown; category?: unknown; photo?: unknown; forceNew?: unknown };
   try {
     b = await req.json();
   } catch {
@@ -31,6 +31,7 @@ export async function POST(req: Request) {
       p_category: b.category,
       p_photo: b.photo,
       p_ip: ip || null,
+      p_force_new: b.forceNew === true,
     });
     return json({ ...out, ward: { id: ward.id, name: ward.name }, label });
   } catch (e) {

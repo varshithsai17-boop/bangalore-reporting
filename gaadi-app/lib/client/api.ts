@@ -56,10 +56,11 @@ export const api = {
   checkin: (home: Home, status: VanStatus) =>
     call<{ ok: true }>("/api/checkin", post({ device: deviceId(), lat: home.lat, lng: home.lng, street: home.street, status })),
   photo: (blob: Blob) => call<{ path: string }>("/api/photo", { method: "POST", headers: { "Content-Type": blob.type }, body: blob }),
-  spot: (lat: number, lng: number, category: Category, photo: string) =>
+  /** forceNew: the reporter said it's not one of the nearby spots we showed them, so never auto-merge. */
+  spot: (lat: number, lng: number, category: Category, photo: string, forceNew = false) =>
     call<{ spot_id: string; merged: boolean; ward: { id: string; name: string }; label: string | null }>(
       "/api/spot",
-      post({ device: deviceId(), lat, lng, category, photo }),
+      post({ device: deviceId(), lat, lng, category, photo, forceNew }),
     ),
   vote: (spot: string, kind: "still" | "cleaned" | "flag", photo?: string) => call<{ ok: true }>("/api/vote", post({ spot, kind, photo, device: deviceId() })),
 };
