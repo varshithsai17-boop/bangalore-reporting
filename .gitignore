@@ -1,0 +1,20 @@
+# dependencies and builds
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.vercel/
+
+# secrets (never commit)
+.env
+.env.local
+.env*.local
+
+# generated at install time
+**/public/maplibre/
+
+# local leftovers
+_to_delete/
+AGENTS.md
+CLAUDE.md

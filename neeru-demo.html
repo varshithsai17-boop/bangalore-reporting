@@ -1,0 +1,770 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>
+<title>Neeru Flood Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Kannada:wght@400;600&display=swap">
+<style>
+/* Single dark "monsoon night" look, chosen on purpose: it's a map people open while it's raining. */
+:root{
+  color-scheme: dark;
+  --bg:#0c1822; --panel:#112230; --panel-2:#16293a; --line:#223a4e; --road:#2b4760; --road-major:#3a5a76;
+  --lake:#12384f; --text:#e7eef2; --muted:#8ea3b2; --faint:#5d7485;
+  --ankle:#7fd0e6; --knee:#f2b33d; --waist:#f2743a; --closed:#e5484d;
+  --ok:#5fc48a; --ink:#0c1822; --chalk:#eef1ea;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --kn:"Noto Sans Kannada","Instrument Sans",sans-serif;
+  --r:14px;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.45 var(--body);padding-inline:16px;padding-block:0;overflow-x:hidden}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--ankle);outline-offset:2px}
+.app{max-width:1180px;margin:0 auto;min-height:100%;display:grid;grid-template-rows:auto 1fr;gap:12px;padding-block:14px 110px}
+
+/* Header */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.word{font:800 40px/0.9 var(--display);letter-spacing:.01em;text-transform:uppercase}
+.word span{color:var(--ankle)}
+.kn-mark{font:600 15px var(--kn);color:var(--muted)}
+.tag{font-size:13px;color:var(--muted);margin-top:4px}
+.live{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--mono);padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--muted);white-space:nowrap}
+.pill.rain{color:var(--text)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--closed);box-shadow:0 0 0 0 rgba(229,72,77,.6);animation:beat 1.8s infinite}
+.pill.demo{border-style:dashed}
+@keyframes beat{0%{box-shadow:0 0 0 0 rgba(229,72,77,.55)}70%{box-shadow:0 0 0 8px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
+
+/* Layout */
+.main{display:grid;grid-template-columns:1fr;gap:12px;min-height:0}
+@media (min-width:900px){.main{grid-template-columns:minmax(0,1fr) 380px}}
+.mapwrap{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--bg);height:56vh;min-height:340px}
+@media (min-width:900px){.mapwrap{height:calc(100vh - 150px);min-height:520px}}
+#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#map.placing{cursor:crosshair}
+canvas.rain{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.5}
+.legend{position:absolute;left:10px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 80px)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 11.5px var(--mono);padding:4px 8px;border-radius:99px;background:rgba(12,24,34,.86);border:1px solid var(--line);color:var(--text)}
+.sw{width:9px;height:9px;border-radius:50%}
+.zoom{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:rgba(17,34,48,.92);font:600 18px var(--body)}
+.placebar{position:absolute;left:10px;right:10px;top:10px;margin-right:50px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--chalk);color:var(--ink);font-weight:600;font-size:14px}
+.placebar button{border:0;background:transparent;color:var(--ink);text-decoration:underline;font-weight:600}
+
+/* Side panel */
+.side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.tabs{display:flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.tabs button{flex:1;border:0;background:transparent;padding:8px 10px;border-radius:9px;font-weight:600;font-size:14px;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--panel-2);color:var(--text)}
+.list{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:hidden}
+@media (min-width:900px){.list{max-height:calc(100vh - 290px);overflow-y:auto}}
+.row{display:grid;grid-template-columns:6px 1fr auto;gap:12px;align-items:center;padding:11px 14px 11px 0;border:0;border-bottom:1px solid var(--line);background:transparent;text-align:left;width:100%}
+.row:last-child{border-bottom:0}
+.row:hover{background:var(--panel-2)}
+.row .bar{align-self:stretch;border-radius:0 4px 4px 0}
+.row b{display:block;font-weight:600;font-size:14.5px}
+.row small{display:block;color:var(--muted);font-size:12.5px}
+.row .meta{text-align:right;font:500 12px var(--mono);color:var(--muted);white-space:nowrap}
+.row .meta strong{display:block;color:var(--text);font-size:13px}
+.row.mine b::after{content:"You";margin-left:8px;font:500 10.5px var(--mono);padding:2px 6px;border-radius:99px;background:var(--chalk);color:var(--ink);vertical-align:2px}
+.zones{padding:14px;display:flex;flex-direction:column;gap:10px}
+.zrow{display:grid;grid-template-columns:110px 1fr 34px;gap:10px;align-items:center;font-size:13.5px}
+.ztrack{height:12px;border-radius:4px;background:var(--panel-2);overflow:hidden;display:flex}
+.ztrack i{display:block;height:100%}
+.zrow .n{font:500 12.5px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.note{font-size:12.5px;color:var(--muted);padding:0 2px}
+
+/* FAB */
+.fab{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:20;display:flex;align-items:center;gap:10px;border:0;border-radius:99px;padding:15px 24px;background:var(--chalk);color:var(--ink);font:700 16px var(--body);box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.fab svg{width:20px;height:20px}
+
+/* Sheet */
+.scrim{position:fixed;inset:0;background:rgba(4,10,15,.6);z-index:30}
+.sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:0;z-index:31;width:min(560px,100%);max-height:88vh;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-bottom:0;border-radius:20px 20px 0 0;padding:18px 18px calc(22px + env(safe-area-inset-bottom,0px))}
+.grab{width:40px;height:4px;border-radius:4px;background:var(--line);margin:-6px auto 12px}
+.sheet h2{font:800 30px/1 var(--display);text-transform:uppercase;letter-spacing:.01em;text-wrap:balance;margin:0}
+.sheet h3{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0}
+.sub{color:var(--muted);font-size:13.5px;margin-top:6px}
+.x{position:absolute;right:14px;top:12px;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--panel-2);font-size:18px}
+.stack{display:flex;flex-direction:column;gap:14px}
+.hstack{display:flex;gap:10px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--panel-2);border-radius:12px;padding:11px 14px;font-weight:600;font-size:14px;text-align:center;text-decoration:none;color:var(--text);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.primary{background:var(--chalk);color:var(--ink);border-color:var(--chalk)}
+.btn.grow{flex:1}
+.btn[disabled]{opacity:.45;cursor:default}
+
+/* Staff gauge (the depth marker posted at flood-prone underpasses) */
+.gaugebox{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fact{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.fact span{display:block;font:500 11px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.fact strong{display:block;font-size:15px;margin-top:2px}
+.flag{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--mono);padding:4px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.flag.warn{color:var(--knee);border-color:rgba(242,179,61,.4)}
+
+/* Report flow */
+.steps{display:flex;gap:6px}
+.steps i{flex:1;height:4px;border-radius:4px;background:var(--line)}
+.steps i.on{background:var(--ankle)}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1.5px dashed var(--road-major);border-radius:16px;padding:28px 16px;text-align:center;color:var(--muted)}
+.drop strong{color:var(--text);font-size:16px}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.photo{width:100%;max-height:260px;object-fit:cover;border-radius:14px;border:1px solid var(--line)}
+.think{display:flex;align-items:center;gap:10px;font:500 13px var(--mono);color:var(--muted)}
+.spinner{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--ankle);animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.depthpick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.depthpick button{border:1px solid var(--line);background:var(--panel-2);border-radius:12px;padding:10px 6px;font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px}
+.depthpick button[aria-pressed="true"]{border-color:var(--text);background:#1d3448}
+.depthpick small{font:500 11px var(--mono);color:var(--muted)}
+.ai{border:1px solid var(--line);border-radius:14px;padding:12px 14px;background:var(--panel-2)}
+.ai .lbl{font:500 11px var(--mono);color:var(--ankle);text-transform:uppercase;letter-spacing:.06em}
+.complaint{white-space:pre-wrap;font-size:14px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg)}
+.complaint.kn{font-family:var(--kn);font-size:14.5px}
+.near{display:flex;flex-direction:column;gap:6px}
+.near button{text-align:left;border:1px solid var(--line);background:var(--panel-2);border-radius:10px;padding:9px 12px;font-size:14px}
+.near button[aria-pressed="true"]{border-color:var(--text)}
+.near small{color:var(--muted);font:500 11.5px var(--mono);margin-left:6px}
+.helpline{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:13.5px}
+.helpline code{font:500 14px var(--mono);user-select:all}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--chalk);color:var(--ink);font-weight:600;font-size:14px;padding:10px 16px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-width:calc(100% - 32px)}
+
+/* Map marks */
+.pin{cursor:pointer}
+.pin .ring{fill:none;stroke-width:1.2;transform-box:fill-box;transform-origin:center;animation:ripple 2.4s ease-out infinite}
+@keyframes ripple{from{opacity:.9;transform:scale(1)}to{opacity:0;transform:scale(2.6)}}
+.pin.sel .core{stroke:#fff;stroke-width:1.4}
+.maplabel{font:600 5.2px var(--body);fill:var(--faint);letter-spacing:.04em;text-transform:uppercase;pointer-events:none}
+.roadlabel{font:500 4px var(--mono);fill:var(--faint);pointer-events:none}
+
+@media (prefers-reduced-motion:reduce){
+  .dot,.pin .ring,.spinner{animation:none}
+  canvas.rain{display:none}
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="brand"><div class="word">Nee<span>ru</span></div><div class="kn-mark" lang="kn">ನೀರು</div></div>
+      <div class="tag">Bengaluru's live map of flooded roads, reported by people standing in them.</div>
+    </div>
+    <div class="live">
+      <span class="pill rain"><i class="dot" aria-hidden="true"></i><span id="liveTxt">Raining now</span></span>
+      <span class="pill demo" title="Every report on this page is sample data for the demo">Demo · sample reports</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="mapwrap" aria-label="Map of flooded roads">
+      <svg id="map" viewBox="0 0 292 280" role="img" aria-label="Map of Bengaluru with flooded spots"></svg>
+      <canvas class="rain" id="rain" aria-hidden="true"></canvas>
+      <div class="zoom">
+        <button id="zin" aria-label="Zoom in">+</button>
+        <button id="zout" aria-label="Zoom out">−</button>
+        <button id="zreset" aria-label="Reset map" style="font-size:13px">⤢</button>
+      </div>
+      <div class="placebar" id="placebar" hidden><span>Tap the map where the water is</span><button id="cancelPlace">Cancel</button></div>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <aside class="side">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tabAvoid" aria-selected="true">Avoid now</button>
+        <button role="tab" id="tabZones" aria-selected="false">Worst zones</button>
+      </div>
+      <div id="panelAvoid" class="list" role="tabpanel" aria-labelledby="tabAvoid"></div>
+      <div id="panelZones" class="list" role="tabpanel" aria-labelledby="tabZones" hidden></div>
+      <p class="note" id="panelNote">Ranked by depth, then by how many people confirmed it in the last hour.</p>
+    </aside>
+  </main>
+</div>
+
+<button class="fab" id="fab">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+  Report flooding
+</button>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- Geography ---------- */
+const LNG0 = 77.48, LAT0 = 13.12, K = 1000, COS = 0.974;
+const px = (lat, lng) => [ (lng - LNG0) * K * COS, (LAT0 - lat) * K ];
+const unproject = (x, y) => [ LAT0 - y / K, LNG0 + x / (K * COS) ];
+const kmBetween = (a, b) => {
+  const dLat = (a[0] - b[0]) * 111, dLng = (a[1] - b[1]) * 111 * COS;
+  return Math.hypot(dLat, dLng);
+};
+
+const ROADS = {
+  major: [
+    // Outer Ring Road loop
+    [[13.0358,77.5970],[13.0450,77.6230],[13.0330,77.6390],[13.0180,77.6570],[12.9990,77.6710],[12.9910,77.6960],[12.9560,77.7010],[12.9360,77.6900],[12.9270,77.6800],[12.9230,77.6710],[12.9200,77.6500],[12.9172,77.6228],[12.9160,77.6100],[12.9070,77.5850],[12.9150,77.5600],[12.9300,77.5380],[12.9450,77.5230],[12.9600,77.5170],[12.9850,77.5200],[13.0100,77.5300],[13.0280,77.5400],[13.0420,77.5650],[13.0358,77.5970]],
+    [[12.9770,77.5720],[13.0140,77.5840],[13.0358,77.5970],[13.0700,77.5960],[13.1000,77.5960],[13.1200,77.6000]], // Bellary Rd
+    [[12.9560,77.6100],[12.9360,77.6180],[12.9172,77.6228],[12.9010,77.6300],[12.8750,77.6450],[12.8456,77.6603],[12.8400,77.6650]], // Hosur Rd
+    [[12.9636,77.5967],[12.9730,77.6170],[12.9610,77.6387],[12.9580,77.6700],[12.9560,77.7010],[12.9700,77.7350],[12.9840,77.7520],[12.9900,77.7800]], // Old Airport Rd
+    [[12.9860,77.6150],[12.9950,77.6450],[13.0030,77.6620],[12.9990,77.6710],[13.0070,77.6950],[13.0200,77.7600]], // Old Madras Rd
+    [[12.9770,77.5720],[12.9580,77.5600],[12.9450,77.5230],[12.9300,77.4950],[12.9150,77.4800]], // Mysore Rd
+    [[12.9900,77.5700],[13.0280,77.5400],[13.0450,77.5100],[13.0650,77.4800]], // Tumkur Rd
+  ],
+  minor: [
+    [[12.9500,77.5750],[12.9200,77.5700],[12.8900,77.5600],[12.8500,77.5450]], // Kanakapura
+    [[12.9400,77.6000],[12.9150,77.6000],[12.8870,77.5990],[12.8500,77.5950]], // Bannerghatta
+    [[12.9350,77.6250],[12.9230,77.6710],[12.9050,77.7000],[12.8850,77.7400]], // Sarjapur
+    [[13.0000,77.6200],[13.0340,77.6380],[13.0700,77.6550],[13.0950,77.6650]], // Hennur
+    [[13.0450,77.6230],[13.0800,77.6300],[13.1150,77.6350]], // Thanisandra
+    [[12.9636,77.5967],[12.9770,77.5720],[12.9860,77.6040],[12.9860,77.6150]], // Centre
+    [[12.9380,77.6250],[12.9450,77.7470]], // Koramangala–Varthur
+  ],
+};
+const LAKES = [
+  [12.9350,77.6650,9,4.2],[12.9450,77.7420,5.5,3],[13.0450,77.5880,4,2.6],[12.9820,77.6220,2.4,1.7],
+  [12.9080,77.6150,3.2,2.2],[13.0100,77.5740,2.4,1.5],[13.0900,77.5850,4.2,2.6],[12.8780,77.6050,3.2,2.2],[12.9230,77.6450,2,1.4]
+];
+const LABELS = [
+  ["Yelahanka",13.108,77.580],["Hebbal",13.052,77.575],["Whitefield",12.998,77.742],["Majestic",12.972,77.556],
+  ["Koramangala",12.931,77.600],["Electronic City",12.832,77.640],["Nagarbhavi",12.972,77.496],["Bellandur",12.946,77.672],["JP Nagar",12.897,77.566],["KR Puram",13.016,77.690]
+];
+
+/* ---------- Depth scale ---------- */
+const DEPTH = {
+  ankle:  {label:"Ankle-deep", short:"Ankle", cm:[5,15],  pass:"Walkable. Slow down on two-wheelers.", color:"var(--ankle)", rank:1},
+  knee:   {label:"Knee-deep",  short:"Knee",  cm:[15,45], pass:"Two-wheelers stalling. Cars can pass slowly.", color:"var(--knee)", rank:2},
+  waist:  {label:"Waist-deep", short:"Waist", cm:[45,90], pass:"Cars stalling. Only buses and trucks getting through.", color:"var(--waist)", rank:3},
+  closed: {label:"Impassable", short:"Closed",cm:[90,140],pass:"Road or underpass closed. Take another route.", color:"var(--closed)", rank:4},
+};
+const HEX = {ankle:"#7fd0e6", knee:"#f2b33d", waist:"#f2743a", closed:"#e5484d"};
+
+/* ---------- Demo reports (sample data) ---------- */
+const now = Date.now();
+const M = 60000;
+const SEED = [
+  ["Sai Layout, Horamavu",13.0290,77.6600,"Mahadevapura","closed",44,6,true,"Water entering ground-floor homes"],
+  ["KR Circle underpass",12.9770,77.5870,"West","closed",31,11,false,"Underpass barricaded"],
+  ["Hennur Main Road",13.0340,77.6380,"East","waist",38,4,true,""],
+  ["ORR at Ecospace, Bellandur",12.9270,77.6800,"Mahadevapura","waist",52,9,true,""],
+  ["Manyata Tech Park gate",13.0450,77.6200,"East","waist",27,14,false,""],
+  ["Ejipura main road",12.9380,77.6250,"South","waist",19,22,true,""],
+  ["Silk Board junction",12.9172,77.6228,"Bommanahalli","knee",61,3,true,""],
+  ["Electronic City flyover ramp",12.8456,77.6603,"Bommanahalli","knee",23,17,false,""],
+  ["Domlur, Old Airport Road",12.9610,77.6387,"East","knee",18,26,false,""],
+  ["BGS flyover, Mysore Road",12.9580,77.5600,"West","knee",15,31,true,""],
+  ["Marathahalli bridge",12.9560,77.7010,"Mahadevapura","knee",29,12,false,""],
+  ["Mahadevapura ORR",12.9910,77.6960,"Mahadevapura","knee",12,35,false,""],
+  ["Tin Factory, KR Puram",12.9990,77.6710,"Mahadevapura","knee",21,19,true,""],
+  ["Sarjapur Road, Iblur",12.9230,77.6710,"Mahadevapura","knee",16,28,false,""],
+  ["Nagawara junction",13.0440,77.6230,"East","knee",11,40,false,""],
+  ["Nayandahalli, Mysore Road",12.9450,77.5230,"RR Nagar","knee",9,44,true,""],
+  ["Hosur Road, Bommanahalli",12.9010,77.6300,"Bommanahalli","knee",14,24,false,""],
+  ["Varthur Kodi",12.9450,77.7470,"Mahadevapura","ankle",8,33,true,""],
+  ["Richmond Circle",12.9636,77.5967,"East","ankle",13,15,false,""],
+  ["MG Road, Trinity Circle",12.9730,77.6170,"East","ankle",10,21,false,""],
+  ["Hebbal flyover",13.0358,77.5970,"East","ankle",17,8,false,""],
+  ["Kasturi Nagar",13.0030,77.6620,"East","ankle",6,48,false,""],
+  ["Bannerghatta Road, Arekere",12.8870,77.5990,"Bommanahalli","ankle",7,52,false,""],
+  ["Shivajinagar bus stand",12.9860,77.6040,"East","ankle",5,57,true,""],
+  ["Whitefield, Hope Farm",12.9840,77.7520,"Mahadevapura","ankle",9,39,false,""],
+  ["Kogilu Cross, Yelahanka",13.0980,77.5970,"Yelahanka","ankle",4,63,false,""],
+];
+let spots = SEED.map((s, i) => ({
+  id: "s" + i, name: s[0], lat: s[1], lng: s[2], zone: s[3], depth: s[4],
+  reports: s[5], still: Math.round(s[5] * 0.7), gone: Math.round(s[5] * 0.08),
+  at: now - s[6] * M, drain: s[7], note: s[8], mine: false,
+}));
+const EXTRA_PLACES = [
+  ["Koramangala Sony Signal",12.9352,77.6245],["HSR Layout 27th Main",12.9116,77.6389],["BTM Layout Water Tank",12.9166,77.6101],
+  ["Indiranagar 100 Feet Road",12.9719,77.6412],["Jayanagar 4th Block",12.9250,77.5838],["Malleshwaram 8th Cross",13.0031,77.5700],
+  ["Rajajinagar Navrang",12.9981,77.5530],["Yeshwanthpur Circle",13.0280,77.5400],["Banashankari Temple",12.9255,77.5468],
+  ["Kengeri Road, RR Nagar",12.9270,77.5170],["Bellandur Lake bund",12.9380,77.6720],["Brookefield",12.9660,77.7160],
+  ["Thanisandra Main Road",13.0600,77.6330],["Kalyan Nagar",13.0220,77.6400],["Majestic bus stand",12.9770,77.5720],
+];
+
+/* ---------- Helpers ---------- */
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ago = (t) => { const m = Math.max(1, Math.round((Date.now() - t) / M)); return m < 60 ? m + " min ago" : Math.floor(m / 60) + " h " + (m % 60) + " min ago"; };
+const sortSpots = (a, b) => DEPTH[b.depth].rank - DEPTH[a.depth].rank || b.still - a.still;
+const NS = "http://www.w3.org/2000/svg";
+const svgEl = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+let toastTimer;
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 2600);
+}
+async function copy(text, done) {
+  try { await navigator.clipboard.writeText(text); toast(done || "Copied"); }
+  catch { toast("Couldn't copy. Select the text and copy it yourself."); }
+}
+
+/* ---------- Map ---------- */
+const svg = $("#map");
+const FULL = [0, 0, 292, 280];
+let vb = FULL.slice();
+let selectedId = null;
+let placing = false;
+let draftPoint = null;
+
+function drawBase() {
+  svg.innerHTML = "";
+  const base = svgEl("g", {});
+  base.append(svgEl("rect", {x:-400,y:-400,width:1100,height:1100,fill:"#0c1822"}));
+  for (const [lat, lng, rx, ry] of LAKES) {
+    const [x, y] = px(lat, lng);
+    base.append(svgEl("ellipse", {cx:x, cy:y, rx, ry, fill:"#12384f", transform:`rotate(-18 ${x} ${y})`}));
+  }
+  const path = (pts) => pts.map((p, i) => (i ? "L" : "M") + px(p[0], p[1]).map((n) => n.toFixed(1)).join(" ")).join("");
+  for (const r of ROADS.minor) base.append(svgEl("path", {d:path(r), fill:"none", stroke:"#223a4e", "stroke-width":1.1, "stroke-linecap":"round", "stroke-linejoin":"round"}));
+  for (const r of ROADS.major) base.append(svgEl("path", {d:path(r), fill:"none", stroke:"#3a5a76", "stroke-width":1.9, "stroke-linecap":"round", "stroke-linejoin":"round"}));
+  const orr = ROADS.major[0][4]; const [ox, oy] = px(orr[0], orr[1]);
+  const lab = svgEl("text", {x:ox + 3, y:oy - 3, class:"roadlabel"}); lab.textContent = "OUTER RING RD"; base.append(lab);
+  for (const [name, lat, lng] of LABELS) {
+    const [x, y] = px(lat, lng); const t = svgEl("text", {x, y, class:"maplabel", "text-anchor":"middle"}); t.textContent = name; base.append(t);
+  }
+  svg.append(base);
+  svg.append(svgEl("g", {id:"pins"}));
+  svg.append(svgEl("g", {id:"draft"}));
+}
+
+function drawPins() {
+  const g = $("#pins", svg); g.innerHTML = "";
+  const ordered = spots.slice().sort((a, b) => DEPTH[a.depth].rank - DEPTH[b.depth].rank);
+  const scale = vb[2] / FULL[2];
+  for (const s of ordered) {
+    const [x, y] = px(s.lat, s.lng);
+    const r = (2.2 + Math.min(3.2, Math.sqrt(s.reports) * 0.42)) * Math.max(0.55, scale);
+    const pin = svgEl("g", {class:"pin" + (s.id === selectedId ? " sel" : ""), tabindex:0, role:"button", "aria-label":`${s.name}, ${DEPTH[s.depth].label}`});
+    if (Date.now() - s.at < 15 * M) pin.append(svgEl("circle", {cx:x, cy:y, r, class:"ring", stroke:HEX[s.depth]}));
+    pin.append(svgEl("circle", {cx:x, cy:y, r:r + 1.1 * Math.max(0.55, scale), fill:"#0c1822", opacity:.65}));
+    pin.append(svgEl("circle", {cx:x, cy:y, r, fill:HEX[s.depth], class:"core"}));
+    if (s.mine) pin.append(svgEl("circle", {cx:x, cy:y, r:r * 0.38, fill:"#0c1822"}));
+    const open = () => openSpot(s.id);
+    pin.addEventListener("click", (e) => { e.stopPropagation(); if (!placing) open(); });
+    pin.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    g.append(pin);
+  }
+}
+
+function drawDraft() {
+  const g = $("#draft", svg); g.innerHTML = "";
+  if (!draftPoint) return;
+  const [x, y] = px(draftPoint[0], draftPoint[1]);
+  const s = Math.max(0.55, vb[2] / FULL[2]);
+  g.append(svgEl("path", {d:`M${x} ${y} l-${3*s} -${6*s} a${3.4*s} ${3.4*s} 0 1 1 ${6*s} 0 z`, fill:"#eef1ea", stroke:"#0c1822", "stroke-width":0.6*s}));
+  g.append(svgEl("circle", {cx:x, cy:y - 7.6 * s, r:1.3 * s, fill:"#0c1822"}));
+}
+
+function setVB(next) {
+  const w = Math.min(FULL[2] * 1.2, Math.max(40, next[2]));
+  const h = w * FULL[3] / FULL[2];
+  const cx = next[0] + next[2] / 2, cy = next[1] + next[3] / 2;
+  vb = [Math.min(Math.max(cx - w / 2, -60), FULL[2] + 60 - w), Math.min(Math.max(cy - h / 2, -60), FULL[3] + 60 - h), w, h];
+  svg.setAttribute("viewBox", vb.map((n) => n.toFixed(2)).join(" "));
+  drawPins(); drawDraft();
+}
+const zoomBy = (f, cx, cy) => {
+  const w = vb[2] * f, h = vb[3] * f;
+  const ax = cx ?? vb[0] + vb[2] / 2, ay = cy ?? vb[1] + vb[3] / 2;
+  setVB([ax - (ax - vb[0]) * f, ay - (ay - vb[1]) * f, w, h]);
+};
+const focusOn = (s) => { const [x, y] = px(s.lat, s.lng); const w = Math.min(vb[2], 120); setVB([x - w / 2, y - w * 0.48, w, w]); };
+$("#zin").onclick = () => zoomBy(0.7);
+$("#zout").onclick = () => zoomBy(1 / 0.7);
+$("#zreset").onclick = () => setVB(FULL);
+
+function svgPoint(e) {
+  const r = svg.getBoundingClientRect();
+  // preserveAspectRatio meet: compute the drawn box
+  const s = Math.min(r.width / vb[2], r.height / vb[3]);
+  const ox = (r.width - vb[2] * s) / 2, oy = (r.height - vb[3] * s) / 2;
+  return [vb[0] + (e.clientX - r.left - ox) / s, vb[1] + (e.clientY - r.top - oy) / s, s];
+}
+let drag = null;
+svg.addEventListener("pointerdown", (e) => { drag = {x:e.clientX, y:e.clientY, vb:vb.slice(), moved:false}; svg.setPointerCapture(e.pointerId); });
+svg.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.hypot(dx, dy) > 4) drag.moved = true;
+  if (!drag.moved) return;
+  svg.style.cursor = "grabbing";
+  const s = svgPoint(e)[2];
+  vb = [drag.vb[0] - dx / s, drag.vb[1] - dy / s, drag.vb[2], drag.vb[3]];
+  svg.setAttribute("viewBox", vb.join(" "));
+});
+svg.addEventListener("pointerup", (e) => {
+  svg.style.cursor = "";
+  const wasDrag = drag && drag.moved; drag = null;
+  if (wasDrag) { setVB(vb); return; }
+  if (placing) { const [x, y] = svgPoint(e); draftPoint = unproject(x, y); drawDraft(); finishPlacing(); }
+});
+svg.addEventListener("wheel", (e) => { e.preventDefault(); const [x, y] = svgPoint(e); zoomBy(e.deltaY > 0 ? 1.15 : 1 / 1.15, x, y); }, {passive:false});
+
+/* ---------- Legend + panels ---------- */
+$("#legend").innerHTML = Object.values(DEPTH).map((d) => `<span class="chip"><i class="sw" style="background:${d.color}"></i>${d.short}</span>`).join("");
+
+function renderLive() {
+  const total = spots.reduce((n, s) => n + s.reports, 0);
+  $("#liveTxt").textContent = `Raining now · ${spots.length} spots · ${total} reports`;
+}
+function renderAvoid() {
+  const list = spots.slice().sort(sortSpots);
+  $("#panelAvoid").innerHTML = list.map((s) => `
+    <button class="row${s.mine ? " mine" : ""}" data-id="${s.id}">
+      <i class="bar" style="background:${DEPTH[s.depth].color}"></i>
+      <span><b>${esc(s.name)}</b><small>${DEPTH[s.depth].label} · ${esc(s.zone)}${s.drain ? " · drain blocked" : ""}</small></span>
+      <span class="meta"><strong>${s.still} still flooded</strong>${ago(s.at)}</span>
+    </button>`).join("");
+  $("#panelAvoid").querySelectorAll(".row").forEach((b) => (b.onclick = () => openSpot(b.dataset.id)));
+}
+function renderZones() {
+  const z = {};
+  for (const s of spots) { z[s.zone] ??= {ankle:0, knee:0, waist:0, closed:0, n:0}; z[s.zone][s.depth] += s.reports; z[s.zone].n += s.reports; }
+  const rows = Object.entries(z).sort((a, b) => b[1].n - a[1].n);
+  const max = rows[0][1].n;
+  $("#panelZones").innerHTML = `<div class="zones">${rows.map(([name, v]) => `
+    <div class="zrow"><span>${esc(name)}</span>
+      <span class="ztrack" style="width:${(v.n / max * 100).toFixed(1)}%">${["closed","waist","knee","ankle"].map((d) => v[d] ? `<i style="width:${(v[d] / v.n * 100).toFixed(1)}%;background:${DEPTH[d].color}"></i>` : "").join("")}</span>
+      <span class="n">${v.n}</span></div>`).join("")}</div>`;
+}
+function renderAll() { renderLive(); renderAvoid(); renderZones(); drawPins(); }
+
+function setTab(which) {
+  const avoid = which === "avoid";
+  $("#tabAvoid").setAttribute("aria-selected", avoid); $("#tabZones").setAttribute("aria-selected", !avoid);
+  $("#panelAvoid").hidden = !avoid; $("#panelZones").hidden = avoid;
+  $("#panelNote").textContent = avoid ? "Ranked by depth, then by how many people confirmed it in the last hour." : "Reports in the last 2 hours by old BBMP zone, coloured by depth. This is the chart for the post-rain press note.";
+}
+$("#tabAvoid").onclick = () => setTab("avoid");
+$("#tabZones").onclick = () => setTab("zones");
+
+/* ---------- Sheet ---------- */
+const sheet = $("#sheet"), scrim = $("#scrim");
+let onClose = null;
+function openSheet(html, closeCb) {
+  sheet.innerHTML = `<div class="grab"></div><button class="x" aria-label="Close">×</button>${html}`;
+  sheet.hidden = false; scrim.hidden = false; onClose = closeCb || null;
+  $(".x", sheet).onclick = closeSheet;
+  sheet.scrollTop = 0;
+}
+function closeSheet() {
+  sheet.hidden = true; scrim.hidden = true; selectedId = null; drawPins();
+  const cb = onClose; onClose = null; if (cb) cb();
+}
+scrim.onclick = closeSheet;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !sheet.hidden) closeSheet(); });
+
+function gaugeSVG(depth, cm) {
+  const H = 120, top = 8, max = 120;
+  const lvl = Math.min(cm, max);
+  const y = top + H - (lvl / max) * H;
+  let ticks = "";
+  for (let v = 0; v <= max; v += 10) {
+    const ty = top + H - (v / max) * H;
+    ticks += `<line x1="22" x2="${v % 50 === 0 ? 36 : 30}" y1="${ty}" y2="${ty}" stroke="#e7eef2" stroke-width="1"/>`;
+    if (v % 20 === 0) ticks += `<text x="40" y="${ty + 3}" font-family="IBM Plex Mono,monospace" font-size="8.5" fill="#8ea3b2">${v}</text>`;
+  }
+  return `<svg width="76" height="140" viewBox="0 0 76 140" aria-label="Estimated depth ${cm} cm">
+    <rect x="18" y="${top}" width="22" height="${H}" rx="2" fill="#16293a" stroke="#223a4e"/>
+    <rect x="18" y="${y}" width="22" height="${top + H - y}" rx="2" fill="${HEX[depth]}" opacity=".85"/>
+    ${ticks}<text x="4" y="${top + H + 10}" font-family="IBM Plex Mono,monospace" font-size="8" fill="#5d7485">cm</text></svg>`;
+}
+const midCm = (d) => Math.round((DEPTH[d].cm[0] + DEPTH[d].cm[1]) / 2);
+
+function shareText(s) {
+  return `Flooded now: ${s.name}, ${DEPTH[s.depth].label.toLowerCase()}. ${DEPTH[s.depth].pass} Confirmed by ${s.still} people on Neeru. #BengaluruRains @blrcitytraffic`;
+}
+
+function openSpot(id) {
+  const s = spots.find((x) => x.id === id); if (!s) return;
+  selectedId = id; focusOn(s); drawPins();
+  const cm = s.cm ?? midCm(s.depth);
+  openSheet(`
+    <div class="stack">
+      <div><h3>${esc(s.zone)} zone · ${ago(s.at)}</h3><h2 style="margin-top:6px">${esc(s.name)}</h2>
+        <p class="sub">${DEPTH[s.depth].pass}${s.note ? " " + esc(s.note) + "." : ""}</p></div>
+      <div class="gaugebox">${gaugeSVG(s.depth, cm)}
+        <div class="stack" style="gap:10px">
+          <div class="facts">
+            <div class="fact"><span>Depth</span><strong style="color:${DEPTH[s.depth].color}">${DEPTH[s.depth].label}</strong></div>
+            <div class="fact"><span>Reports</span><strong>${s.reports}</strong></div>
+            <div class="fact"><span>Still flooded</span><strong id="stillN">${s.still}</strong></div>
+            <div class="fact"><span>Water gone</span><strong id="goneN">${s.gone}</strong></div>
+          </div>
+          ${s.drain ? `<span class="flag warn">Blocked drain reported here</span>` : ""}
+        </div>
+      </div>
+      <div><h3 style="margin-bottom:8px">Are you here now?</h3>
+        <div class="hstack"><button class="btn grow" id="vStill">Still flooded</button><button class="btn grow" id="vGone">Water's gone</button></div></div>
+      <div class="hstack">
+        <a class="btn grow" target="_blank" rel="noopener" href="https://x.com/intent/tweet?text=${encodeURIComponent(shareText(s))}">Post on X</a>
+        <button class="btn grow" id="copyShare">Copy alert</button>
+      </div>
+    </div>`);
+  const vote = (key) => {
+    s[key] += 1; if (key === "still") s.at = Date.now();
+    $("#stillN").textContent = s.still; $("#goneN").textContent = s.gone;
+    $("#vStill").disabled = $("#vGone").disabled = true;
+    toast(key === "still" ? "Thanks. Marked as still flooded." : "Thanks. We'll clear it if others agree.");
+    renderAvoid(); renderLive();
+  };
+  $("#vStill").onclick = () => vote("still");
+  $("#vGone").onclick = () => vote("gone");
+  $("#copyShare").onclick = () => copy(shareText(s), "Alert copied");
+}
+
+/* ---------- Report flow ---------- */
+let sampleFn = null, canSee = false;
+(async () => {
+  try {
+    if (!window.claude) return;
+    sampleFn = await window.claude.use("sample");
+    if (sampleFn) { const lim = await sampleFn.limits().catch(() => null); canSee = !!(lim && lim.images); }
+  } catch { sampleFn = null; }
+})();
+
+let R = null; // report draft
+const stepsBar = (n) => `<div class="steps" aria-hidden="true">${[1,2,3].map((i) => `<i class="${i <= n ? "on" : ""}"></i>`).join("")}</div>`;
+
+function startReport() {
+  R = {file:null, url:null, ai:null, depth:null, place:null, point:null, merged:null, ctl:null};
+  stepPhoto();
+}
+$("#fab").onclick = startReport;
+
+function stepPhoto() {
+  openSheet(`
+    <div class="stack">
+      ${stepsBar(1)}
+      <div><h3>Step 1 of 3</h3><h2 style="margin-top:6px">Snap the water</h2>
+      <p class="sub">${canSee ? "Claude reads the photo: how deep it is, what can get through, and whether a drain is blocked." : "Add a photo so others can see it. You'll pick the depth next."}</p></div>
+      <label class="drop" for="photoIn">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        <strong>Take or choose a photo</strong><span>Stand somewhere safe. Never shoot while riding or driving.</span>
+        <input id="photoIn" type="file" accept="image/jpeg,image/png,image/webp" capture="environment">
+      </label>
+      <button class="btn" id="noPhoto">Report without a photo</button>
+    </div>`, () => { R = null; });
+  $("#photoIn").onchange = (e) => { const f = e.target.files && e.target.files[0]; if (f) { R.file = f; R.url = URL.createObjectURL(f); stepRead(); } };
+  $("#noPhoto").onclick = () => stepRead();
+}
+
+const PROMPT = `You are the photo checker for Neeru, a crowdsourced map of flooded roads in Bengaluru, India.
+Look at the attached photo and reply with ONLY a JSON object, no other text:
+{"is_flooding": boolean, "depth": "ankle"|"knee"|"waist"|"closed", "depth_cm": number, "who_can_pass": string, "drain_blocked": boolean, "garbage_in_water": boolean, "faces_or_plates_visible": boolean, "summary": string, "complaint_en": string, "complaint_kn": string}
+Depth guide, judged from kerbs, tyres, legs, bikes and vehicles in the frame: ankle = up to 15 cm, walkable; knee = 15-45 cm, two-wheelers stall; waist = 45-90 cm, cars stall; closed = over 90 cm, submerged vehicles, or a barricaded road or underpass.
+who_can_pass: under 10 words, e.g. "Buses only, cars stalling".
+summary: one plain sentence under 18 words describing what is visible.
+complaint_en: 2-3 polite sentences to the Greater Bengaluru Authority asking for pumps and drain clearing, using the literal token {PLACE} for the location and stating the depth.
+complaint_kn: the same complaint in natural Kannada, keeping the {PLACE} token.
+If the photo does not show a flooded or waterlogged road, set is_flooding to false and fill the other fields with your best guess.`;
+
+async function stepRead() {
+  const photo = R.url ? `<img class="photo" src="${R.url}" alt="Your photo">` : "";
+  openSheet(`
+    <div class="stack">
+      ${stepsBar(1)}
+      <div><h3>Step 1 of 3</h3><h2 style="margin-top:6px">${R.file && canSee ? "Reading the photo" : "How deep is it?"}</h2></div>
+      ${photo}
+      <div id="readOut"></div>
+    </div>`, () => { R?.ctl?.abort(); R = null; });
+  const out = $("#readOut");
+  if (R.file && sampleFn && canSee) {
+    out.innerHTML = `<div class="think"><span class="spinner"></span><span>Checking depth, vehicles and drains…</span></div><button class="btn" id="stopAi" style="margin-top:10px">Skip and pick depth myself</button>`;
+    R.ctl = new AbortController();
+    $("#stopAi").onclick = () => R.ctl.abort();
+    try {
+      const j = await sampleFn.json(PROMPT, {images: R.file, modelTier: "quick", signal: R.ctl.signal});
+      if (!R) return;
+      const d = DEPTH[j && j.depth] ? j.depth : "knee";
+      R.ai = {
+        flooding: j.is_flooding !== false, depth: d, cm: Number(j.depth_cm) || midCm(d),
+        pass: String(j.who_can_pass || DEPTH[d].pass), drain: !!j.drain_blocked, garbage: !!j.garbage_in_water,
+        people: !!j.faces_or_plates_visible, summary: String(j.summary || ""),
+        en: String(j.complaint_en || ""), kn: String(j.complaint_kn || ""),
+      };
+      R.depth = d;
+      renderAiResult(out);
+    } catch (e) {
+      if (!R) return;
+      const msg = e && e.code === "cancelled" ? "" :
+        e && (e.code === "not_granted" || e.code === "sampling_disabled") ? "Photo reading is switched off for you, so pick the depth." :
+        e && e.code === "rate_limited" ? "Photo reading is busy right now. Pick the depth yourself." :
+        e && e.code === "image_rejected" ? "That photo couldn't be read. Pick the depth yourself." :
+        "Photo reading didn't finish. Pick the depth yourself.";
+      if (e && (e.code === "not_granted" || e.code === "sampling_disabled")) canSee = false;
+      renderManual(out, msg);
+    }
+  } else {
+    renderManual(out, R.file ? "Photo reading isn't available in this view, so pick the depth yourself." : "");
+  }
+}
+
+function renderAiResult(out) {
+  const a = R.ai;
+  out.innerHTML = `
+    <div class="stack">
+      ${a.flooding ? "" : `<div class="ai" style="border-color:rgba(242,179,61,.5)"><span class="lbl" style="color:var(--knee)">Check this</span><p style="margin:6px 0 0">This doesn't look like a flooded road. You can still send it, or try another photo.</p></div>`}
+      <div class="ai"><span class="lbl">Claude read your photo</span>
+        <div class="gaugebox" style="margin-top:8px">${gaugeSVG(a.depth, a.cm)}
+          <div class="stack" style="gap:8px">
+            <strong style="font-size:18px;color:${DEPTH[a.depth].color}">${DEPTH[a.depth].label} · about ${Math.round(a.cm)} cm</strong>
+            <span>${esc(a.pass)}</span>
+            <span class="sub" style="margin:0">${esc(a.summary)}</span>
+            <div class="hstack">${a.drain ? `<span class="flag warn">Drain looks blocked</span>` : ""}${a.garbage ? `<span class="flag warn">Garbage in the water</span>` : ""}${a.people ? `<span class="flag">Faces or number plates visible</span>` : ""}</div>
+          </div>
+        </div>
+      </div>
+      <div><h3 style="margin-bottom:8px">Not right? Change it</h3>${depthPicker()}</div>
+      <button class="btn primary" id="toPlace">Next: where is it?</button>
+    </div>`;
+  wirePicker(out);
+  $("#toPlace").onclick = stepPlace;
+}
+function depthPicker() {
+  return `<div class="depthpick">${Object.entries(DEPTH).map(([k, d]) => `
+    <button data-d="${k}" aria-pressed="${R.depth === k}"><i class="sw" style="background:${d.color};width:12px;height:12px"></i>${d.short}<small>${d.cm[0]}–${d.cm[1] > 100 ? "90+" : d.cm[1]} cm</small></button>`).join("")}</div>`;
+}
+function wirePicker(scope, onPick) {
+  scope.querySelectorAll(".depthpick button").forEach((b) => (b.onclick = () => {
+    R.depth = b.dataset.d; if (R.ai) { R.ai.depth = R.depth; R.ai.cm = midCm(R.depth); }
+    scope.querySelectorAll(".depthpick button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    if (onPick) onPick();
+  }));
+}
+function renderManual(out, msg) {
+  out.innerHTML = `
+    <div class="stack">
+      ${msg ? `<p class="sub" style="margin:0">${esc(msg)}</p>` : ""}
+      ${depthPicker()}
+      <p class="sub" style="margin:0">Judge it by what's in the water: kerbs, tyres, knees, bikes.</p>
+      <label class="hstack" style="align-items:center;gap:8px;font-size:14px"><input type="checkbox" id="drainChk"> A drain looks blocked here</label>
+      <button class="btn primary" id="toPlace" ${R.depth ? "" : "disabled"}>Next: where is it?</button>
+    </div>`;
+  wirePicker(out, () => ($("#toPlace").disabled = false));
+  $("#toPlace").onclick = () => { R.manualDrain = $("#drainChk").checked; stepPlace(); };
+}
+
+function stepPlace() {
+  sheet.hidden = true; scrim.hidden = true;
+  placing = true; svg.classList.add("placing"); $("#placebar").hidden = false; $("#fab").hidden = true;
+  draftPoint = null; drawDraft();
+  toast("Tap the map where the water is");
+}
+function stopPlacing() { placing = false; svg.classList.remove("placing"); $("#placebar").hidden = true; $("#fab").hidden = false; }
+$("#cancelPlace").onclick = () => { stopPlacing(); draftPoint = null; drawDraft(); R = null; };
+
+function finishPlacing() {
+  stopPlacing();
+  const p = draftPoint;
+  const near = [...spots.map((s) => ({name:s.name, lat:s.lat, lng:s.lng, spot:s})), ...EXTRA_PLACES.map(([name, lat, lng]) => ({name, lat, lng}))]
+    .map((c) => ({...c, km:kmBetween(p, [c.lat, c.lng])})).sort((a, b) => a.km - b.km).slice(0, 4);
+  R.point = p; R.place = near[0].name; R.nearList = near;
+  stepConfirm();
+}
+
+function stepConfirm() {
+  const near = R.nearList;
+  openSheet(`
+    <div class="stack">
+      ${stepsBar(2)}
+      <div><h3>Step 2 of 3</h3><h2 style="margin-top:6px">Which spot is this?</h2>
+      <p class="sub">The real app fills this in from your phone's GPS. Here, pick the nearest landmark.</p></div>
+      <div class="near">${near.map((n, i) => `<button data-i="${i}" aria-pressed="${i === 0}">${esc(n.name)}<small>${n.km < 1 ? Math.round(n.km * 1000) + " m" : n.km.toFixed(1) + " km"}${n.spot ? " · already reported" : ""}</small></button>`).join("")}</div>
+      <div class="hstack"><button class="btn" id="rePlace">Move the pin</button><button class="btn primary grow" id="toSend">Next: send it</button></div>
+    </div>`, () => { draftPoint = null; drawDraft(); R = null; });
+  let pick = 0;
+  sheet.querySelectorAll(".near button").forEach((b) => (b.onclick = () => {
+    pick = +b.dataset.i; sheet.querySelectorAll(".near button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  }));
+  $("#rePlace").onclick = () => { onClose = null; stepPlace(); };
+  $("#toSend").onclick = () => { const n = near[pick]; R.place = n.name; R.snap = n; commitReport(); };
+}
+
+function commitReport() {
+  const n = R.snap;
+  const depth = R.depth;
+  const drain = R.ai ? R.ai.drain : !!R.manualDrain;
+  let s;
+  if (n.spot && n.km < 0.6) {
+    s = n.spot; s.reports += 1; s.still += 1; s.at = Date.now();
+    if (DEPTH[depth].rank > DEPTH[s.depth].rank) s.depth = depth;
+    s.drain = s.drain || drain; s.mine = true; R.merged = true;
+  } else {
+    s = {id:"m" + Date.now(), name:R.place, lat:R.point[0], lng:R.point[1], zone:nearestZone(R.point), depth, reports:1, still:1, gone:0, at:Date.now(), drain, note:"", mine:true, cm:R.ai ? R.ai.cm : undefined};
+    spots.push(s); R.merged = false;
+  }
+  R.spot = s;
+  draftPoint = null; drawDraft(); renderAll();
+  stepSend();
+}
+function nearestZone(p) {
+  let best = null, d = 1e9;
+  for (const s of spots) { const k = kmBetween(p, [s.lat, s.lng]); if (k < d) { d = k; best = s.zone; } }
+  return best || "East";
+}
+
+function complaintEN() {
+  const d = DEPTH[R.depth];
+  if (R.ai && R.ai.en) return R.ai.en.replaceAll("{PLACE}", R.place);
+  return `Dear Greater Bengaluru Authority, the road at ${R.place} is ${d.label.toLowerCase()} with rainwater right now. ${d.pass} Please send a pump and clear the drains here.`;
+}
+function complaintKN() { return R.ai && R.ai.kn ? R.ai.kn.replaceAll("{PLACE}", R.place) : ""; }
+
+function stepSend() {
+  const s = R.spot, en = complaintEN(), kn = complaintKN();
+  const tweet = `${s.name} is ${DEPTH[s.depth].label.toLowerCase()} right now. ${DEPTH[s.depth].pass} Reported on Neeru. #BengaluruRains @blrcitytraffic`;
+  const wa = en + (kn ? "\n\n" + kn : "");
+  openSheet(`
+    <div class="stack">
+      ${stepsBar(3)}
+      <div><h3>Step 3 of 3</h3><h2 style="margin-top:6px">${R.merged ? "Added to an existing spot" : "It's on the map"}</h2>
+      <p class="sub">${R.merged ? `${esc(s.name)} now has ${s.reports} reports. Yours made it ${s.still} "still flooded".` : "Your pin is live. Now tell the people who can fix it."}</p></div>
+      <div><h3 style="margin-bottom:8px">Complaint${R.ai && R.ai.en ? ", written from your photo" : ""}</h3>
+        <div class="complaint">${esc(en)}</div>
+        ${kn ? `<div class="complaint kn" lang="kn" style="margin-top:8px">${esc(kn)}</div>` : ""}</div>
+      <div class="helpline"><span>City waste &amp; drains WhatsApp</span><code>94481 97197</code></div>
+      <div class="stack" style="gap:8px">
+        <a class="btn primary" target="_blank" rel="noopener" href="https://wa.me/919448197197?text=${encodeURIComponent(wa)}">Send on WhatsApp, then attach your photo</a>
+        <div class="hstack">
+          <a class="btn grow" target="_blank" rel="noopener" href="https://x.com/intent/tweet?text=${encodeURIComponent(tweet)}">Post on X</a>
+          <button class="btn grow" id="copyC">Copy complaint</button>
+        </div>
+      </div>
+      <button class="btn" id="seePin">See it on the map</button>
+    </div>`, () => { R = null; });
+  $("#copyC").onclick = () => copy(wa, "Complaint copied");
+  $("#seePin").onclick = () => { const id = s.id; onClose = null; closeSheet(); R = null; openSpot(id); };
+}
+
+/* ---------- Rain ---------- */
+function rain() {
+  const c = $("#rain"); if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const ctx = c.getContext("2d"); let drops = [], W = 0, H = 0;
+  const size = () => { const r = c.getBoundingClientRect(); W = c.width = r.width * devicePixelRatio; H = c.height = r.height * devicePixelRatio; drops = Array.from({length: Math.round(W * H / 9000)}, () => ({x:Math.random() * W, y:Math.random() * H, l:6 + Math.random() * 12, v:5 + Math.random() * 6})); };
+  size(); addEventListener("resize", size);
+  const tick = () => {
+    ctx.clearRect(0, 0, W, H); ctx.strokeStyle = "rgba(160,200,225,.35)"; ctx.lineWidth = 1 * devicePixelRatio; ctx.beginPath();
+    for (const d of drops) { ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - d.l * 0.25, d.y + d.l); d.y += d.v; d.x -= d.v * 0.25; if (d.y > H) { d.y = -d.l; d.x = Math.random() * W * 1.2; } }
+    ctx.stroke(); requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+/* ---------- Boot ---------- */
+drawBase(); setVB(FULL); renderAll(); rain();
+setInterval(renderAvoid, 30000);
+})();
+</script>
+
+</body></html>

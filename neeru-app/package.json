@@ -1,0 +1,31 @@
+{
+  "name": "neeru",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live crowdsourced map of flooded roads in Bengaluru, with route checking.",
+  "scripts": {
+    "dev": "node scripts/copy-maplibre-worker.mjs && next dev",
+    "build": "node scripts/copy-maplibre-worker.mjs && next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node scripts/copy-maplibre-worker.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@googlemaps/polyline-codec": "^1.0.28",
+    "maplibre-gl": "^6.11.2",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/google.maps": "^3.66.4",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}
