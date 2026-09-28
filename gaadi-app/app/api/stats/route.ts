@@ -10,6 +10,6 @@ export async function GET(req: Request) {
     const stats = await getWardStats(days);
     return json({ days, stats }, { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" } });
   } catch (e) {
-    return errorResponse(e, "Couldn't load ward numbers.");
+    return errorResponse(e, "loadStats", req);
   }
 }

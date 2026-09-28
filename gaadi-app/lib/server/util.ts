@@ -1,4 +1,12 @@
 import "server-only";
+import { errorText, langFromCookieHeader, type Lang } from "../i18n";
+
+/** The language the person picked, from the switcher's cookie. */
+export const langOf = (req?: Request): Lang => langFromCookieHeader(req?.headers.get("cookie") ?? null);
+
+/** A JSON error in the person's language. `code` is a key of `errors` in lib/i18n/en.ts. */
+export const fail = (req: Request, code: string, status: number, extra: Record<string, unknown> = {}) =>
+  json({ error: errorText(langOf(req), code), ...extra }, { status });
 
 /** Client IP as seen by Vercel (first hop of x-forwarded-for). */
 export function clientIp(req: Request): string {
@@ -44,7 +52,7 @@ export const json = (body: unknown, init: ResponseInit = {}) =>
     headers: { "content-type": "application/json; charset=utf-8", ...(init.headers ?? {}) },
   });
 
-export const tooMany = () => json({ error: "Too many requests. Wait a minute and try again." }, { status: 429 });
+export const tooMany = (req?: Request) => json({ error: errorText(langOf(req), "tooManyRequests") }, { status: 429 });
 
 export async function fetchJson(url: string, init: RequestInit & { timeoutMs?: number } = {}) {
   const ctl = new AbortController();

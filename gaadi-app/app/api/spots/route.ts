@@ -4,11 +4,11 @@ import { json } from "@/lib/server/util";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const spots = await getSpots();
     return json({ spots }, { headers: { "Cache-Control": "public, s-maxage=20, stale-while-revalidate=40" } });
   } catch (e) {
-    return errorResponse(e, "Couldn't load garbage spots.");
+    return errorResponse(e, "loadSpots", req);
   }
 }

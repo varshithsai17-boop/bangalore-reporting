@@ -1,29 +1,33 @@
 import { CATEGORIES } from "@/lib/constants";
 import { streetAt } from "@/lib/server/osm";
-import { errorResponse, RPC_MESSAGES, rpc } from "@/lib/server/supabase";
-import { clientIp, json, rateLimited, tooMany } from "@/lib/server/util";
+import { errorResponse, writeRpc } from "@/lib/server/supabase";
+import { browserId, requireUser } from "@/lib/server/session";
+import { clientIp, fail, json, rateLimited, tooMany } from "@/lib/server/util";
 import type { Category } from "@/lib/types";
 import { wardAt } from "@/lib/wards";
 
 export async function POST(req: Request) {
   const ip = clientIp(req);
-  if (rateLimited(`spot:${ip}`, 10, 60_000)) return tooMany();
+  if (rateLimited(`spot:${ip}`, 10, 60_000)) return tooMany(req);
+  const user = await requireUser(req);
+  if (user instanceof Response) return user;
   let b: { device?: unknown; lat?: unknown; lng?: unknown; category?: unknown; photo?: unknown; forceNew?: unknown };
   try {
     b = await req.json();
   } catch {
-    return json({ error: "Bad request." }, { status: 400 });
+    return fail(req, "badRequest", 400);
   }
   const lat = Number(b.lat);
   const lng = Number(b.lng);
-  if (!CATEGORIES.includes(b.category as Category)) return json({ error: RPC_MESSAGES.bad_category }, { status: 400 });
-  if (typeof b.photo !== "string") return json({ error: "Add a photo of the garbage." }, { status: 400 });
+  if (!CATEGORIES.includes(b.category as Category)) return fail(req, "bad_category", 400);
+  if (typeof b.photo !== "string") return fail(req, "photoRequired", 400);
   const ward = Number.isFinite(lat) && Number.isFinite(lng) ? wardAt(lat, lng) : null;
-  if (!ward) return json({ error: RPC_MESSAGES.outside_bengaluru }, { status: 400 });
+  if (!ward) return fail(req, "outside_bengaluru", 400);
   const label = await streetAt(lat, lng).catch(() => null);
   try {
-    const out = await rpc<{ spot_id: string; merged: boolean }>("gaadi_submit_spot", {
-      p_device: String(b.device ?? ""),
+    const out = await writeRpc<{ spot_id: string; merged: boolean }>("gaadi_submit_spot", {
+      p_user: user.id,
+      p_browser: browserId(b.device),
       p_ward: ward.id,
       p_lat: lat,
       p_lng: lng,
@@ -35,6 +39,6 @@ export async function POST(req: Request) {
     });
     return json({ ...out, ward: { id: ward.id, name: ward.name }, label });
   } catch (e) {
-    return errorResponse(e, "Couldn't send your report. Try again.");
+    return errorResponse(e, "reportFail", req);
   }
 }

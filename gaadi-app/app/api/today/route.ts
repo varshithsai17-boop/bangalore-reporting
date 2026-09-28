@@ -1,13 +1,14 @@
-import { rpc } from "@/lib/server/supabase";
+import { getUser } from "@/lib/server/session";
+import { writeRpc } from "@/lib/server/supabase";
 import { json } from "@/lib/server/util";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  const device = new URL(req.url).searchParams.get("device") ?? "";
-  if (!/^[A-Za-z0-9-]{16,64}$/.test(device)) return json({ today: null });
+  const user = await getUser(req).catch(() => null);
+  if (!user) return json({ today: null }, { headers: { "Cache-Control": "no-store" } });
   try {
-    return json({ today: await rpc("gaadi_my_today", { p_device: device }) }, { headers: { "Cache-Control": "no-store" } });
+    return json({ today: await writeRpc("gaadi_my_today", { p_user: user.id }) }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return json({ today: null });
   }

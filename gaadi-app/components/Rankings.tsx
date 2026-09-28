@@ -2,18 +2,21 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { MIN_CHECKINS, pct, scoreColor } from "@/lib/constants";
+import { wardName } from "@/lib/i18n";
+import { useLang } from "./LangProvider";
 import type { WardStat } from "@/lib/types";
 
 const CORPS = ["All", "Central", "East", "North", "South", "West"];
 type Sort = "worst" | "best" | "spots";
 
 export default function Rankings({ stats }: { stats: WardStat[] }) {
+  const { t, lang } = useLang();
   const [corp, setCorp] = useState("All");
   const [sort, setSort] = useState<Sort>("worst");
   const [q, setQ] = useState("");
 
   const { ranked, pending } = useMemo(() => {
-    const f = stats.filter((s) => (corp === "All" || s.corp === corp) && s.name.toLowerCase().includes(q.trim().toLowerCase()));
+    const f = stats.filter((s) => (corp === "All" || s.corp === corp) && (s.name + " " + (s.name_kn ?? "")).toLowerCase().includes(q.trim().toLowerCase()));
     const ranked = f.filter((s) => s.checkins >= MIN_CHECKINS && s.score != null);
     ranked.sort((a, b) =>
       sort === "spots" ? b.open_spots - a.open_spots || a.score! - b.score! : sort === "worst" ? a.score! - b.score! || b.checkins - a.checkins : b.score! - a.score! || b.checkins - a.checkins,
@@ -24,24 +27,24 @@ export default function Rankings({ stats }: { stats: WardStat[] }) {
   return (
     <section className="card">
       <div className="filters">
-        <div className="chips" role="group" aria-label="Corporation">
+        <div className="chips" role="group" aria-label={t.rankings.corpAria}>
           {CORPS.map((c) => (
             <button key={c} aria-pressed={corp === c} onClick={() => setCorp(c)}>
-              {c}
+              {t.common.corp[c] ?? c}
             </button>
           ))}
         </div>
         <div className="filters-row">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a ward" aria-label="Find a ward" />
-          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label="Sort by">
-            <option value="worst">Worst first</option>
-            <option value="best">Best first</option>
-            <option value="spots">Most open garbage spots</option>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.rankings.find} aria-label={t.rankings.find} />
+          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} aria-label={t.rankings.sortBy}>
+            <option value="worst">{t.rankings.worstFirst}</option>
+            <option value="best">{t.rankings.bestFirst}</option>
+            <option value="spots">{t.rankings.mostSpots}</option>
           </select>
         </div>
       </div>
       {ranked.length === 0 ? (
-        <p className="muted">No ward has {MIN_CHECKINS} check-ins yet for this filter.</p>
+        <p className="muted">{t.rankings.noneYet(MIN_CHECKINS)}</p>
       ) : (
         <ol className="table">
           {ranked.map((s, i) => (
@@ -49,10 +52,8 @@ export default function Rankings({ stats }: { stats: WardStat[] }) {
               <Link href={`/ward/${s.ward_id}`}>
                 <span className="n">{i + 1}</span>
                 <span className="name">
-                  <b>{s.name}</b>
-                  <small>
-                    {s.corp} · {s.checkins} check-ins · {s.open_spots} open {s.open_spots === 1 ? "spot" : "spots"}
-                  </small>
+                  <b>{wardName(lang, s)}</b>
+                  <small>{t.rankings.row(t.common.corp[s.corp] ?? s.corp, s.checkins, s.open_spots)}</small>
                 </span>
                 <span className="bar" aria-hidden="true">
                   <i style={{ width: `${Math.round((s.score ?? 0) * 100)}%`, background: scoreColor(s.score) }} />
@@ -68,12 +69,12 @@ export default function Rankings({ stats }: { stats: WardStat[] }) {
       {pending.length > 0 && (
         <details className="pending">
           <summary>
-            {pending.length} {pending.length === 1 ? "ward needs" : "wards need"} more check-ins to be ranked
+            {t.rankings.pending(pending.length)}
           </summary>
           <ul>
             {pending.map((s) => (
               <li key={s.ward_id}>
-                <Link href={`/ward/${s.ward_id}`}>{s.name}</Link> <small>({s.checkins})</small>
+                <Link href={`/ward/${s.ward_id}`}>{wardName(lang, s)}</Link> <small>({s.checkins})</small>
               </li>
             ))}
           </ul>

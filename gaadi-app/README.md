@@ -13,6 +13,8 @@
   - MapLibre with OpenFreeMap tiles for the map
   - Nominatim for street names
   - Photon for search
+- **Sign-in with Google** is needed to check in, report or vote. Browsing needs nothing. The database stores only a hash of the Google account id: no email, no name.
+- **Three languages**: English, Hindi and Kannada, switched from the header and remembered per browser. All text lives in `lib/i18n/en.ts`, `hi.ts` and `kn.ts`. In Kannada, ward names show in Kannada too. The complaint sent to the city on WhatsApp stays in English.
 - **Ward boundaries** (`lib/data/wards.json`) come from the GBA final delimitation of December 2025 (369 wards across 5 corporations), via OpenCity, simplified for the web.
 
 ## Run it on your laptop
@@ -22,27 +24,37 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. `.env.local` is already filled in.
+Open http://localhost:3000. `.env.local` is already filled in, except `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (see below). Until you add it, everything works except checking in, reporting and voting.
+
+## Set up Google sign-in (10 minutes, free)
+
+1. Go to https://console.cloud.google.com, create a project (e.g. "Gaadi Bantha").
+2. **APIs & Services → OAuth consent screen**: pick External, app name "Gaadi Bantha", your email as support and developer contact. Scopes: leave the defaults (email, profile, openid). Publish the app (Testing mode only lets test users sign in).
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, type **Web application**.
+   Under **Authorized JavaScript origins** add `http://localhost:3000`, `http://localhost` and your live URL (e.g. `https://gaadibantha.vercel.app`). No redirect URIs are needed.
+4. Copy the client ID (ends in `.apps.googleusercontent.com`) into `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in `.env.local` and in Vercel, then restart `npm run dev`.
 
 ## Deploy to Vercel
 
 1. Push this folder to a new GitHub repo. `.env.local` is gitignored, so your keys won't be pushed.
 2. In Vercel, click **Add New → Project** and pick the repo.
-3. Under **Settings → Environment Variables**, add everything in `.env.local`, and set `NEXT_PUBLIC_SITE_URL` to your final URL so share images and links point at it.
+3. Under **Settings → Environment Variables**, add everything in `.env.local` (including `GAADI_SERVER_KEY`, `SESSION_SECRET` and `NEXT_PUBLIC_GOOGLE_CLIENT_ID`), and set `NEXT_PUBLIC_SITE_URL` to your final URL so share images and links point at it. Add that URL to the Google client's authorized origins too.
 4. Deploy.
 
 ## How the numbers work
 
-- **Check-ins**: one per phone per day (Indian time). You can change your answer that day, up to 5 times. The location is stored rounded to about 10 m, and the exact home location is never saved.
+- **Accounts**: one Google account = one voice. Check-ins, reports and votes are counted per account. A phone can check in for at most 2 accounts a day (a shared family phone). To block an account: `update gaadi.users set banned = true where id = '...';`
+- **Check-ins**: one per account per day (Indian time). You can change your answer that day, up to 5 times. The location is stored rounded to about 10 m, and the exact home location is never saved.
 - **Ward score**: the share of check-ins in the last 7 (or 30) days that say "Came". A ward needs **15 check-ins** in the window to get a score or be ranked, so a handful of answers can't swing it. Change `MIN_CHECKINS` in `lib/constants.ts` to adjust.
 - **Spot reports**:
   - A report within 40 m of an open spot of the same kind joins that spot.
   - A spot is marked cleaned after 2 "It's cleaned" taps, or 1 with an after photo.
   - Photos flagged by 3 different people are hidden.
 - **Spam limits**:
-  - 1 spot report per 20 s and 20 per hour per phone, plus a per-IP limit.
+  - 1 spot report per 20 s and 20 per hour per account, plus a per-IP limit.
   - The photo upload endpoint has its own limit.
   - IPs are stored only as a one-way hash.
+  - Every function that changes data needs `GAADI_SERVER_KEY`, so nobody can skip the app and write to the database with the public Supabase key. If you change the key, update its hash: `update gaadi.settings set value = encode(extensions.digest('NEW-KEY', 'sha256'), 'hex') where key = 'server_key_sha256';`
 - **Photos**: shrunk on the phone to 1280 px, which also strips GPS and other metadata, and checked on the server to be a real JPEG/WebP under 900 KB.
 
 ## Demo data (a simulated month)

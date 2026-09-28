@@ -22,6 +22,8 @@ export type Spot = {
 export type WardStat = {
   ward_id: string;
   name: string;
+  /** Kannada name, added on the server from the ward boundary file. */
+  name_kn?: string | null;
   corp: string;
   checkins: number;
   came: number;

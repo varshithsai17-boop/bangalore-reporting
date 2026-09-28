@@ -4,7 +4,7 @@ import { wardAt } from "@/lib/wards";
 
 /** Ward and street name for a point. */
 export async function GET(req: Request) {
-  if (rateLimited(`locate:${clientIp(req)}`, 30, 60_000)) return tooMany();
+  if (rateLimited(`locate:${clientIp(req)}`, 30, 60_000)) return tooMany(req);
   const u = new URL(req.url);
   const lat = Number(u.searchParams.get("lat"));
   const lng = Number(u.searchParams.get("lng"));

@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LangSwitch } from "@/components/LangProvider";
 import ShareBar from "@/components/ShareBar";
 import { wardShareText } from "@/components/share";
-import { CATEGORY_INFO, MIN_CHECKINS, pct, photoUrl, scoreColor } from "@/lib/constants";
+import { MIN_CHECKINS, pct, photoUrl, scoreColor } from "@/lib/constants";
+import { fill, LANGS, wardName, type Dict } from "@/lib/i18n";
+import { getDict } from "@/lib/i18n/server";
 import { getSpots, getWardDetail, getWardStats } from "@/lib/server/data";
 import type { WardDetail, WardStat } from "@/lib/types";
 import { wardById } from "@/lib/wards";
@@ -32,6 +35,9 @@ export default async function WardPage({ params }: Params) {
   const { id } = await params;
   const base = wardById(id);
   if (!base) notFound();
+  const { lang, t } = await getDict();
+  const locale = LANGS.find((l) => l.code === lang)!.html;
+  const name = wardName(lang, base);
   const [s7, s30, detail, spots] = await Promise.all([getWardStats(7), getWardStats(30), getWardDetail(id), getSpots()]);
   const w7 = s7.find((s) => s.ward_id === id)!;
   const w30 = s30.find((s) => s.ward_id === id)!;
@@ -49,85 +55,85 @@ export default async function WardPage({ params }: Params) {
             Gaadi Bantha<span className="q">?</span>
           </span>
         </Link>
-        <nav className="nav">
-          <Link href="/wards">Ward rankings</Link>
-          <Link href="/">Map</Link>
-        </nav>
+        <div className="top-end">
+          <nav className="nav">
+            <Link href="/wards">{t.common.rankings}</Link>
+            <Link href="/">{t.common.map}</Link>
+          </nav>
+          <LangSwitch />
+        </div>
       </header>
 
       <section className="rc-head">
         <span className="lbl">
-          Ward {base.no} · {base.corp} corporation · {base.assembly} assembly · population {base.pop.toLocaleString("en-IN")}
+          {t.ward.top(base.no, t.common.corp[base.corp] ?? base.corp, base.assembly, base.pop.toLocaleString("en-IN"))}
         </span>
         <h1>
-          {base.name}{" "}
-          <span className="kn" lang="kn">
-            {base.name_kn}
-          </span>
+          {name}{" "}
+          {lang !== "kn" && (
+            <span className="kn" lang="kn">
+              {base.name_kn}
+            </span>
+          )}
         </h1>
       </section>
 
       <section className="rc-grid">
         <div className="card rc-score">
-          <span className="lbl">Van came · last 7 days</span>
+          <span className="lbl">{t.ward.came7}</span>
           <div className="huge" style={{ color: enough7 ? scoreColor(w7.score) : undefined }}>
             {enough7 ? pct(w7.score) : "–"}
           </div>
           <p>
             {enough7 ? (
               <>
-                of {w7.checkins} check-ins from {w7.streets} {w7.streets === 1 ? "street" : "streets"}.{" "}
-                {rank ? (
-                  <>
-                    Ranked <b>#{rank}</b> of {of} wards with enough data.
-                  </>
-                ) : null}
+                {t.ward.ofCheckins(w7.checkins, w7.streets)} {rank ? fill(t.ward.ranked, { rank: <b>#{rank}</b>, of }) : null}
               </>
             ) : (
-              <>Only {w7.checkins} check-ins this week. A ward needs {MIN_CHECKINS} to get a score. Share this page with your neighbours.</>
+              <>{t.ward.onlyN(w7.checkins, MIN_CHECKINS)}</>
             )}
           </p>
         </div>
         <div className="card rc-facts">
-          <Fact label="Last 30 days" value={enough30 ? pct(w30.score) : "–"} color={enough30 ? scoreColor(w30.score) : undefined} sub={`${w30.checkins} check-ins`} />
-          <Fact label="Van didn't come" value={String(w7.missed)} sub="times this week" />
-          <Fact label="Came, didn't take it" value={String(w7.refused)} sub="times this week" />
-          <Fact label="Open garbage spots" value={String(open.length)} sub={w30.avg_clean_days != null ? `cleaned in ${w30.avg_clean_days} days on average` : "none cleaned yet"} />
+          <Fact label={t.ward.last30} value={enough30 ? pct(w30.score) : "–"} color={enough30 ? scoreColor(w30.score) : undefined} sub={t.common.checkins(w30.checkins)} />
+          <Fact label={t.ward.missed} value={String(w7.missed)} sub={t.ward.timesWeek} />
+          <Fact label={t.ward.refused} value={String(w7.refused)} sub={t.ward.timesWeek} />
+          <Fact label={t.ward.openSpots} value={String(open.length)} sub={w30.avg_clean_days != null ? t.ward.cleanedAvg(w30.avg_clean_days) : t.ward.noneCleaned} />
         </div>
       </section>
 
       <section className="card">
-        <span className="lbl">Every day, last 30 days</span>
-        <DailyChart daily={detail.daily} />
+        <span className="lbl">{t.ward.everyDay}</span>
+        <DailyChart daily={detail.daily} t={t} locale={locale} />
         <div className="chart-key">
           <span>
             <i style={{ background: "#2f8f57" }} />
-            Came
+            {t.status.came.label}
           </span>
           <span>
             <i style={{ background: "#e9b12a" }} />
-            Came, didn't take it
+            {t.status.refused.label}
           </span>
           <span>
             <i style={{ background: "#c8372d" }} />
-            Didn't come
+            {t.status.missed.label}
           </span>
         </div>
       </section>
 
       {detail.streets.length > 0 && (
         <section className="card">
-          <span className="lbl">Streets with the most misses · 30 days</span>
+          <span className="lbl">{t.ward.worstStreets}</span>
           <ol className="rank">
             {detail.streets.map((s) => (
               <li key={s.street}>
                 <div className="rank-row">
                   <span>
                     <b>{s.street}</b>
-                    <small>{s.n} check-ins</small>
+                    <small>{t.common.checkins(s.n)}</small>
                   </span>
                   <span className="score" style={{ color: scoreColor(1 - s.missed / s.n) }}>
-                    {s.missed} missed
+                    {t.ward.missedN(s.missed)}
                   </span>
                 </div>
               </li>
@@ -137,17 +143,17 @@ export default async function WardPage({ params }: Params) {
       )}
 
       <section className="card">
-        <span className="lbl">Open garbage spots in {base.name}</span>
+        <span className="lbl">{t.ward.openIn(name)}</span>
         {open.length === 0 ? (
-          <p className="muted small">None reported right now.</p>
+          <p className="muted small">{t.ward.noneNow}</p>
         ) : (
           <div className="photo-grid">
             {open.slice(0, 12).map((s) => (
               <figure key={s.id}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photoUrl(s.photo)} alt={`${CATEGORY_INFO[s.category].label} at ${s.label ?? "a spot in this ward"}`} loading="lazy" />
+                <img src={photoUrl(s.photo)} alt={t.ward.spotAlt(t.cats[s.category].label, s.label ?? t.ward.aSpot)} loading="lazy" />
                 <figcaption>
-                  <b>{CATEGORY_INFO[s.category].label}</b>
+                  <b>{t.cats[s.category].label}</b>
                   {s.label}
                 </figcaption>
               </figure>
@@ -157,12 +163,12 @@ export default async function WardPage({ params }: Params) {
       </section>
 
       <section className="card">
-        <span className="lbl">Share this report card</span>
-        <ShareBar text={enough7 ? wardShareText(w7) : `Did the garbage van come in ${base.name}? Check in daily on Gaadi Bantha.`} path={`/ward/${id}`} />
+        <span className="lbl">{t.ward.share}</span>
+        <ShareBar text={enough7 ? wardShareText(w7, t, name) : t.share.wardLow(name)} path={`/ward/${id}`} />
       </section>
 
       <p className="muted small foot">
-        Numbers come from residents' daily check-ins on this site and are not official figures. Ward boundaries: GBA final delimitation, December 2025, via OpenCity.
+        {t.ward.foot}
       </p>
     </div>
   );
@@ -178,7 +184,7 @@ function Fact({ label, value, sub, color }: { label: string; value: string; sub:
   );
 }
 
-function DailyChart({ daily }: { daily: WardDetail["daily"] }) {
+function DailyChart({ daily, t, locale }: { daily: WardDetail["daily"]; t: Dict; locale: string }) {
   const W = 720;
   const H = 180;
   const padL = 26;
@@ -191,7 +197,7 @@ function DailyChart({ daily }: { daily: WardDetail["daily"] }) {
   const y = (v: number) => padT + (H - padB - padT) * (1 - v / top);
   return (
     <div className="chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Daily check-ins for the last 30 days: came, came but didn't take it, and didn't come">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t.ward.chartAria}>
         {[0, 1, 2, 3, 4].map((i) => (
           <g key={i}>
             <line x1={padL} x2={W} y1={y(i * step)} y2={y(i * step)} stroke="#d6ddd5" strokeWidth="1" />
@@ -213,13 +219,13 @@ function DailyChart({ daily }: { daily: WardDetail["daily"] }) {
           const date = new Date(d.day + "T00:00:00");
           return (
             <g key={d.day}>
-              <title>{`${date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}: ${d.came} came, ${d.refused} came but didn't take it, ${d.missed} didn't come`}</title>
+              <title>{t.ward.dayTitle(date.toLocaleDateString(locale, { day: "numeric", month: "short" }), d.came, d.refused, d.missed)}</title>
               {seg(d.came, "#2f8f57", "c")}
               {seg(d.refused, "#e9b12a", "r")}
               {seg(d.missed, "#c8372d", "m")}
               {(i % 5 === 0 || i === daily.length - 1) && (
                 <text x={x + w / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="#5d6b62" fontFamily="var(--font-mono)">
-                  {date.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  {date.toLocaleDateString(locale, { day: "numeric", month: "short" })}
                 </text>
               )}
             </g>

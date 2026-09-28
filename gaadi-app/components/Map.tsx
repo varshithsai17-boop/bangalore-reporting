@@ -5,6 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef } from "react";
 import { CATEGORY_INFO, MIN_CHECKINS, NO_DATA, SCORE_STOPS } from "@/lib/constants";
 import type { LatLng, Spot, WardStat } from "@/lib/types";
+import { useLang } from "./LangProvider";
 
 setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
@@ -43,6 +44,9 @@ export default function GaadiMap(p: MapProps) {
   const markers = useRef<Record<string, Marker>>({});
   const props = useRef(p);
   props.current = p;
+  const { t } = useLang();
+  const tRef = useRef(t);
+  tRef.current = t;
 
   useEffect(() => {
     if (!el.current) return;
@@ -60,7 +64,7 @@ export default function GaadiMap(p: MapProps) {
     // Individual tile or icon errors are normal; only complain if the map never gets going.
     m.on("error", (e: { error?: unknown }) => console.warn(e.error));
     const failTimer = setTimeout(() => {
-      if (!ready.current) props.current.onError("The map couldn't load. Check your connection.");
+      if (!ready.current) props.current.onError(tRef.current.map.loadFail);
     }, 15000);
     m.once("style.load", async () => {
       m.addSource("wards", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" });
@@ -106,7 +110,7 @@ export default function GaadiMap(p: MapProps) {
         wards.current = await res.json();
         (m.getSource("wards") as GeoJSONSource | undefined)?.setData(wards.current!);
       } catch {
-        props.current.onError("Ward boundaries couldn't load.");
+        props.current.onError(tRef.current.map.wardsFail);
       }
       sync();
     });
@@ -187,5 +191,5 @@ export default function GaadiMap(p: MapProps) {
     m.fitBounds(b, { padding: 50, maxZoom: 15, duration: 600 });
   }, [p.fitWard?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={el} className="map-canvas" aria-label="Map of Bengaluru wards and garbage spots" />;
+  return <div ref={el} className="map-canvas" aria-label={t.map.aria} />;
 }

@@ -1,27 +1,30 @@
 import { CATEGORY_INFO, CITY_WHATSAPP, pct, photoUrl } from "@/lib/constants";
+import { en, type Dict } from "@/lib/i18n/en";
 import type { Spot, WardStat } from "@/lib/types";
 
 export const siteUrl = () =>
   (typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_SITE_URL) || "http://localhost:3000";
 
-export function timeAgo(iso: string, now = Date.now()): string {
+export function timeAgo(iso: string, t: Dict = en, now = Date.now()): string {
   const m = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60000));
-  if (m < 1) return "just now";
-  if (m < 60) return `${m} min ago`;
+  if (m < 1) return t.time.justNow;
+  if (m < 60) return t.time.minAgo(m);
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} h ago`;
-  const d = Math.floor(h / 24);
-  return `${d} ${d === 1 ? "day" : "days"} ago`;
+  if (h < 24) return t.time.hAgo(h);
+  return t.time.daysAgo(Math.floor(h / 24));
 }
 
-export function daysOpen(s: Spot, now = Date.now()): string {
+export function daysOpen(s: Spot, t: Dict = en, now = Date.now()): string {
   const d = Math.floor((now - new Date(s.created_at).getTime()) / 86_400_000);
-  return d < 1 ? "since today" : `for ${d} ${d === 1 ? "day" : "days"}`;
+  return d < 1 ? t.time.sinceToday : t.time.forDays(d);
 }
 
 const mapsLink = (s: Spot) => `https://maps.google.com/?q=${s.lat.toFixed(6)},${s.lng.toFixed(6)}`;
 
-/** Pre-written complaint to the city's waste WhatsApp line. */
+/**
+ * Pre-written complaint to the city's waste WhatsApp line. Always in English, whatever language
+ * the app is in, because it goes to city officials.
+ */
 export function spotWhatsApp(s: Spot, wardName?: string) {
   const c = CATEGORY_INFO[s.category];
   const text =
@@ -33,12 +36,12 @@ export function spotWhatsApp(s: Spot, wardName?: string) {
   return `https://wa.me/${CITY_WHATSAPP}?text=${encodeURIComponent(text)}`;
 }
 
-export function spotShareX(s: Spot, wardName?: string) {
-  const c = CATEGORY_INFO[s.category];
-  const text = `${c.label} at ${s.label || "this spot"}${wardName ? ` (${wardName} ward)` : ""}, open ${daysOpen(s)}. Reported by ${s.confirms} ${s.confirms === 1 ? "resident" : "residents"} on Gaadi Bantha. #Bengaluru`;
+/** Post on X, in the person's language. */
+export function spotShareX(s: Spot, t: Dict, wardName?: string) {
+  const text = t.share.spotX(t.cats[s.category].label, s.label || t.share.thisSpot, wardName ?? "", daysOpen(s, t), s.confirms);
   return `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(mapsLink(s))}`;
 }
 
-export function wardShareText(w: WardStat) {
-  return `${w.name}, Bengaluru: residents say the garbage van came on ${pct(w.score)} of days this week (${w.checkins} check-ins). ${w.open_spots} garbage ${w.open_spots === 1 ? "spot" : "spots"} still open. Is your ward better?`;
+export function wardShareText(w: WardStat, t: Dict = en, name = w.name) {
+  return t.share.ward(name, pct(w.score), w.checkins, w.open_spots);
 }

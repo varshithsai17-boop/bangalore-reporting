@@ -15,9 +15,10 @@
   --good: #2f8f57;
   --warn: #e9b12a;
   --bad: #c8372d;
-  --display: var(--font-display), "Arial Black", Impact, sans-serif;
-  --sans: var(--font-body), system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: var(--font-mono), ui-monospace, Menlo, Consolas, monospace;
+  /* Latin fonts first; Hindi and Kannada letters fall through to the Noto fonts. */
+  --display: var(--font-display), var(--font-hi), var(--font-kn), "Arial Black", Impact, sans-serif;
+  --sans: var(--font-body), var(--font-hi), var(--font-kn), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: var(--font-mono), var(--font-hi), var(--font-kn), ui-monospace, Menlo, Consolas, monospace;
   --r: 14px;
 }
 
@@ -231,3 +232,29 @@ h2 { font-size: 24px; line-height: 1.08; }
 .dupe-info small { color: var(--muted); font-size: 12px; }
 .dupes li .btn { min-height: 38px; padding: 8px 10px; font-size: 13px; white-space: nowrap; }
 @media (max-width: 420px) { .dupes li { grid-template-columns: 56px 1fr; } .dupes li .btn { grid-column: 1 / -1; } }
+
+/* ---------- language switch + account ---------- */
+.top-end { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.lang { display: inline-flex; border: 1px solid var(--line-2); border-radius: 999px; padding: 2px; background: var(--paper); }
+.lang button { border: 0; background: none; min-width: 34px; height: 30px; padding: 0 9px; border-radius: 999px; font-weight: 700; font-size: 13px; color: var(--muted); }
+.lang button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.acct { position: relative; }
+.acct-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px 0 3px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--paper); font-weight: 700; font-size: 13px; }
+.acct-btn.out { padding: 0 12px; }
+.acct-btn img, .acct-btn .ini { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+.acct-btn .ini { display: grid; place-items: center; background: var(--plate); color: var(--ink); font-size: 13px; }
+.acct-menu { position: absolute; right: 0; top: 40px; z-index: 30; min-width: 200px; padding: 12px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line-2); box-shadow: 0 12px 30px rgba(21, 36, 27, 0.16); display: grid; gap: 8px; }
+.acct-menu small { color: var(--muted); }
+
+/* ---------- sign-in sheet ---------- */
+.sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(21, 36, 27, 0.45); display: flex; align-items: flex-end; justify-content: center; padding: 0; }
+.sheet { width: 100%; max-width: 440px; background: var(--paper); border-radius: 22px 22px 0 0; padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 12px; text-align: center; animation: sheet-up 0.22s ease-out; }
+.sheet p { margin: 0; }
+.gbtn { display: flex; justify-content: center; min-height: 44px; }
+@media (min-width: 640px) { .sheet-back { align-items: center; } .sheet { border-radius: 22px; } }
+@keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+
+/* Hindi and Kannada: no uppercase tracking on small labels, a touch more line height. */
+html:not([lang^="en"]) .lbl, html:not([lang^="en"]) .facts span { letter-spacing: 0; }
+html:not([lang^="en"]) body { line-height: 1.6; }
