@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/sync.sh --hook=context",
+            "timeout": 60,
+            "statusMessage": "Syncing with GitHub"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/sync.sh --hook=context",
+            "timeout": 60,
+            "statusMessage": "Syncing with GitHub"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/sync.sh --hook=stop",
+            "timeout": 60,
+            "statusMessage": "Pushing to GitHub"
+          }
+        ]
+      }
+    ]
+  }
+}

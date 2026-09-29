@@ -18,3 +18,8 @@ next-env.d.ts
 _to_delete/
 AGENTS.md
 CLAUDE.md
+.DS_Store
+
+# shared Claude memory and hooks are committed; personal Claude settings are not
+!/CLAUDE.md
+.claude/settings.local.json
